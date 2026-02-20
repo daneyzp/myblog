@@ -1,15 +1,5 @@
-{
-  "sheetId": "18y3fqccuUVO_JU5FWXXJyY1yrpnzX1sD6K2HLKrVV1w",
-  "posts": [
-    {
-      "id": "post1",
-      "title": "My First Post",
-      "file": "post.html"
-    },
-    {
-      "id": "post2",
-      "title": "Second Post",
-      "file": "post2.html"
-    }
-  ]
-}
+[
+  "test1.html",
+  "test2.html",
+  "test3.html"
+]
