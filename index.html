@@ -140,12 +140,16 @@ body{
 <div class="grid" id="postsContainer"></div>
 
 <script>
+const WEB_APP_URL="https://script.google.com/macros/s/AKfycby9AgIIq0rdkEYAoi1u4-YTzCi8r_nX3weYcmvtpU0p--m7TcVC9yoykCJf17T4_JcFEg/exec";
+const SHEET_ID="18y3fqccuUVO_JU5FWXXJyY1yrpnzX1sD6K2HLKrVV1w";
+
 const container=document.getElementById("postsContainer");
 const urlParams=new URLSearchParams(location.search);
 const filterLabel=urlParams.get("label");
 
 /* Format numbers */
 function formatNumber(num){
+  num=parseInt(num)||0;
   if(num>=1e12) return (num/1e12).toFixed(1)+'T';
   if(num>=1e9) return (num/1e9).toFixed(1)+'B';
   if(num>=1e6) return (num/1e6).toFixed(1)+'M';
@@ -153,46 +157,38 @@ function formatNumber(num){
   return num;
 }
 
-/* Storage */
-function getViews(id){ return parseInt(localStorage.getItem("views_"+id))||0; }
-function setViews(id,v){ localStorage.setItem("views_"+id,v); }
-
-function getLikes(id){ return parseInt(localStorage.getItem("likes_"+id))||0; }
-function setLikes(id,v){ localStorage.setItem("likes_"+id,v); }
-
-function isLiked(id){ return localStorage.getItem("liked_"+id)==="true"; }
-function setLiked(id,v){ localStorage.setItem("liked_"+id,v); }
-
-/* Increase view */
-function incrementView(id){
-  let v=getViews(id)+1;
-  setViews(id,v);
+/* Send Data */
+function sendData(type,postId){
+  fetch(WEB_APP_URL,{
+    method:"POST",
+    body:JSON.stringify({
+      sheetId:SHEET_ID,
+      postId:postId,
+      type:type
+    })
+  });
 }
 
-/* Toggle like */
+/* Get Stats */
+function getStats(postId,callback){
+  fetch(`${WEB_APP_URL}?sheetId=${SHEET_ID}&postId=${postId}`)
+  .then(res=>res.json())
+  .then(data=>{
+    if(data.status==="success"){
+      callback(data.views,data.likes);
+    }
+  });
+}
+
+/* Toggle Like */
 function toggleLike(e,id){
   e.stopPropagation();
+  sendData("LIKE",id);
 
-  let liked=isLiked(id);
-  let likes=getLikes(id);
-
-  if(liked){
-    likes--;
-    setLiked(id,false);
-  }else{
-    likes++;
-    setLiked(id,true);
-  }
-
-  setLikes(id,likes);
-
-  document.getElementById("like-"+id).innerText=formatNumber(likes);
-
-  const btn=e.currentTarget;
-  btn.classList.toggle("active");
-
-  btn.querySelector(".material-symbols-outlined").innerText=
-    liked?"favorite_border":"favorite";
+  getStats(id,(views,likes)=>{
+    document.getElementById("like-"+id).innerText=
+      formatNumber(likes);
+  });
 }
 
 /* Load posts */
@@ -200,9 +196,11 @@ fetch("posts.json")
 .then(res=>res.json())
 .then(posts=>{
   posts.forEach(postFile=>{
+
     fetch("posts/"+postFile)
     .then(res=>res.text())
     .then(html=>{
+
       const temp=document.createElement("div");
       temp.innerHTML=html;
 
@@ -214,10 +212,6 @@ fetch("posts.json")
 
       if(filterLabel && !labels.includes(filterLabel)) return;
 
-      const views=getViews(postFile);
-      const likes=getLikes(postFile);
-      const liked=isLiked(postFile);
-
       const card=document.createElement("div");
       card.className="card";
 
@@ -227,17 +221,15 @@ fetch("posts.json")
         <div class="card-stats">
           <div class="stat">
             <span class="material-symbols-outlined">visibility</span>
-            <span>${formatNumber(views)}</span>
+            <span id="view-${postFile}">0</span>
           </div>
 
-          <div class="stat like-btn ${liked?'active':''}"
+          <div class="stat like-btn"
                onclick="toggleLike(event,'${postFile}')">
             <span class="material-symbols-outlined">
-              ${liked?'favorite':'favorite_border'}
+              favorite_border
             </span>
-            <span id="like-${postFile}">
-              ${formatNumber(likes)}
-            </span>
+            <span id="like-${postFile}">0</span>
           </div>
         </div>
 
@@ -251,8 +243,17 @@ fetch("posts.json")
         </div>
       `;
 
+      /* Load stats from sheet */
+      getStats(postFile,(views,likes)=>{
+        document.getElementById("view-"+postFile).innerText=
+          formatNumber(views);
+
+        document.getElementById("like-"+postFile).innerText=
+          formatNumber(likes);
+      });
+
       card.onclick=()=>{
-        incrementView(postFile);
+        sendData("VIEW",postFile);
         location.href="post.html?id="+postFile;
       };
 
