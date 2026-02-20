@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Blog Dashboard</title>
+
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+
+body{
+  font-family:'Poppins',sans-serif;
+  background:linear-gradient(135deg,#eef2ff,#f8fafc);
+  padding:20px;
+  color:#111827;
+}
+
+/* Header */
+.header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:30px;
+}
+
+.header h1{
+  font-weight:600;
+  font-size:28px;
+}
+
+/* Grid */
+.grid{
+  display:grid;
+  gap:25px;
+}
+
+@media(min-width:1024px){
+  .grid{grid-template-columns:repeat(3,1fr);}
+}
+@media(min-width:640px) and (max-width:1023px){
+  .grid{grid-template-columns:repeat(2,1fr);}
+}
+@media(max-width:639px){
+  .grid{grid-template-columns:1fr;}
+}
+
+/* Card */
+.card{
+  background:#fff;
+  border-radius:20px;
+  overflow:hidden;
+  box-shadow:0 10px 30px rgba(0,0,0,0.08);
+  transition:.3s;
+  cursor:pointer;
+}
+
+.card:hover{
+  transform:translateY(-6px);
+  box-shadow:0 18px 40px rgba(0,0,0,0.15);
+}
+
+.card img,
+.card video{
+  width:100%;
+  height:220px;
+  object-fit:cover;
+  display:block;
+}
+
+/* Stats */
+.card-stats{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:10px 15px;
+  font-size:14px;
+  border-bottom:1px solid #eee;
+}
+
+.stat{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  color:#555;
+}
+
+.material-symbols-outlined{
+  font-size:20px;
+}
+
+/* Like */
+.like-btn{
+  cursor:pointer;
+  transition:.2s;
+}
+
+.like-btn.active{
+  color:#e11d48;
+}
+
+/* Content */
+.card-content{
+  padding:18px;
+}
+
+.card-content h3{
+  font-size:18px;
+  margin-bottom:8px;
+}
+
+.card-content p{
+  font-size:14px;
+  color:#555;
+  line-height:1.5;
+}
+
+/* Label Badge */
+.label-badge{
+  display:inline-block;
+  background:#eef2ff;
+  color:#4338ca;
+  padding:4px 10px;
+  border-radius:20px;
+  font-size:12px;
+  margin-right:6px;
+  margin-top:8px;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>My Blog</h1>
+</div>
+
+<div class="grid" id="postsContainer"></div>
+
+<script>
+const container=document.getElementById("postsContainer");
+const urlParams=new URLSearchParams(location.search);
+const filterLabel=urlParams.get("label");
+
+/* Format numbers */
+function formatNumber(num){
+  if(num>=1e12) return (num/1e12).toFixed(1)+'T';
+  if(num>=1e9) return (num/1e9).toFixed(1)+'B';
+  if(num>=1e6) return (num/1e6).toFixed(1)+'M';
+  if(num>=1e3) return (num/1e3).toFixed(1)+'K';
+  return num;
+}
+
+/* Storage */
+function getViews(id){ return parseInt(localStorage.getItem("views_"+id))||0; }
+function setViews(id,v){ localStorage.setItem("views_"+id,v); }
+
+function getLikes(id){ return parseInt(localStorage.getItem("likes_"+id))||0; }
+function setLikes(id,v){ localStorage.setItem("likes_"+id,v); }
+
+function isLiked(id){ return localStorage.getItem("liked_"+id)==="true"; }
+function setLiked(id,v){ localStorage.setItem("liked_"+id,v); }
+
+/* Increase view */
+function incrementView(id){
+  let v=getViews(id)+1;
+  setViews(id,v);
+}
+
+/* Toggle like */
+function toggleLike(e,id){
+  e.stopPropagation();
+
+  let liked=isLiked(id);
+  let likes=getLikes(id);
+
+  if(liked){
+    likes--;
+    setLiked(id,false);
+  }else{
+    likes++;
+    setLiked(id,true);
+  }
+
+  setLikes(id,likes);
+
+  document.getElementById("like-"+id).innerText=formatNumber(likes);
+
+  const btn=e.currentTarget;
+  btn.classList.toggle("active");
+
+  btn.querySelector(".material-symbols-outlined").innerText=
+    liked?"favorite_border":"favorite";
+}
+
+/* Load posts */
+fetch("posts.json")
+.then(res=>res.json())
+.then(posts=>{
+  posts.forEach(postFile=>{
+    fetch("posts/"+postFile)
+    .then(res=>res.text())
+    .then(html=>{
+      const temp=document.createElement("div");
+      temp.innerHTML=html;
+
+      const title=temp.querySelector("title")?.innerText||"Post";
+      const media=temp.querySelector("img,video");
+      const desc=temp.querySelector("p")?.innerText||"";
+      const labelsMeta=temp.querySelector("meta[name='labels']");
+      const labels=labelsMeta?labelsMeta.content.split(",").map(l=>l.trim()):[];
+
+      if(filterLabel && !labels.includes(filterLabel)) return;
+
+      const views=getViews(postFile);
+      const likes=getLikes(postFile);
+      const liked=isLiked(postFile);
+
+      const card=document.createElement("div");
+      card.className="card";
+
+      card.innerHTML=`
+        ${media?media.outerHTML:''}
+
+        <div class="card-stats">
+          <div class="stat">
+            <span class="material-symbols-outlined">visibility</span>
+            <span>${formatNumber(views)}</span>
+          </div>
+
+          <div class="stat like-btn ${liked?'active':''}"
+               onclick="toggleLike(event,'${postFile}')">
+            <span class="material-symbols-outlined">
+              ${liked?'favorite':'favorite_border'}
+            </span>
+            <span id="like-${postFile}">
+              ${formatNumber(likes)}
+            </span>
+          </div>
+        </div>
+
+        <div class="card-content">
+          <h3>${title}</h3>
+          <p>${desc.substring(0,100)}...</p>
+          <div>
+            ${labels.map(l=>`<span class="label-badge"
+              onclick="event.stopPropagation();location.href='/?label=${l}'">${l}</span>`).join("")}
+          </div>
+        </div>
+      `;
+
+      card.onclick=()=>{
+        incrementView(postFile);
+        location.href="post.html?id="+postFile;
+      };
+
+      container.appendChild(card);
+    });
+  });
+});
+</script>
+
+</body>
+</html>
