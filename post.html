@@ -214,8 +214,13 @@ body{
 </div>
 
 <script>
+const WEB_APP_URL="https://script.google.com/macros/s/AKfycbz77HspgeZn1fXdJVGRdYhggwWxwJZrKYWy61ryydCp19DcYt0UNGSJ45GNbZuMLWc1Lw/exec";
+
+const SHEET_ID="18y3fqccuUVO_JU5FWXXJyY1yrpnzX1sD6K2HLKrVV1w";
+
 const urlParams=new URLSearchParams(location.search);
 const postId=urlParams.get('id');
+
 const postContent=document.getElementById('postContent');
 const relatedContainer=document.getElementById('relatedPosts');
 
@@ -231,102 +236,76 @@ function formatNumber(num){
   return num;
 }
 
-/* Storage */
-function getViews(id){ return parseInt(localStorage.getItem("views_"+id))||0; }
-function setViews(id,v){ localStorage.setItem("views_"+id,v); }
-
-function getLikes(id){ return parseInt(localStorage.getItem("likes_"+id))||0; }
-function setLikes(id,v){ localStorage.setItem("likes_"+id,v); }
-
-function isLiked(id){ return localStorage.getItem("liked_"+id)==="true"; }
-function setLiked(id,v){ localStorage.setItem("liked_"+id,v); }
-
-/* Comments */
-function getComments(){
-  return JSON.parse(localStorage.getItem("comments_"+postId))||[];
-}
-function saveComments(comments){
-  localStorage.setItem("comments_"+postId,JSON.stringify(comments));
+/* SEND DATA */
+function sendData(type,name="",message=""){
+  fetch(WEB_APP_URL,{
+    method:"POST",
+    body:JSON.stringify({
+      sheetId:SHEET_ID,
+      postId:postId,
+      type:type,
+      name:name,
+      message:message
+    })
+  });
 }
 
-/* Views */
-function updateViews(){
-  const viewedKey="viewed_"+postId;
-  let views=getViews(postId);
+/* LOAD STATS */
+function loadStats(){
+  fetch(`${WEB_APP_URL}?sheetId=${SHEET_ID}&postId=${postId}`)
+  .then(res=>res.json())
+  .then(data=>{
+    if(data.status==="success"){
 
-  if(!localStorage.getItem(viewedKey)){
-    views++;
-    setViews(postId,views);
-    localStorage.setItem(viewedKey,true);
-  }
-  return views;
+      document.getElementById('viewCount').innerText=
+        formatNumber(data.views);
+
+      document.getElementById('likeCount').innerText=
+        formatNumber(data.likes);
+
+      document.getElementById('commentCount').innerText=
+        data.comments.length;
+
+      renderComments(data.comments);
+    }
+  });
 }
 
 /* Like */
 function toggleLike(btn){
-  let liked=isLiked(postId);
-  let likes=getLikes(postId);
-
-  if(liked){
-    likes=Math.max(0,likes-1);
-    setLiked(postId,false);
-    btn.classList.remove('active');
-  }else{
-    likes++;
-    setLiked(postId,true);
-    btn.classList.add('active');
-  }
-
-  setLikes(postId,likes);
-  document.getElementById('likeCount').innerText=formatNumber(likes);
-
-  btn.querySelector('.material-symbols-outlined').innerText=
-    liked?'favorite_border':'favorite';
+  sendData("LIKE");
+  loadStats();
 }
 
-/* Render Comments */
-function renderComments(){
-  const list=document.getElementById('commentList');
-  const countSpan=document.getElementById('commentCount');
-  const comments=getComments();
-
-  countSpan.innerText=comments.length;
-
-  list.innerHTML="";
-  comments.forEach((c,index)=>{
-    const div=document.createElement('div');
-    div.className='comment-item';
-    div.innerHTML=`
-      <span class="delete-comment material-symbols-outlined"
-        onclick="deleteComment(${index})">delete</span>
-      <strong>${c.name}</strong>
-      <p>${c.text}</p>
-    `;
-    list.appendChild(div);
-  });
-}
-
+/* Add Comment */
 function addComment(){
   const name=document.getElementById('commentName').value.trim();
   const text=document.getElementById('commentText').value.trim();
 
   if(!name||!text) return alert("Fill all fields");
 
-  const comments=getComments();
-  comments.push({name,text});
-  saveComments(comments);
+  sendData("COMMENT",name,text);
 
   document.getElementById('commentName').value="";
   document.getElementById('commentText').value="";
 
-  renderComments();
+  setTimeout(loadStats,500);
 }
 
-function deleteComment(index){
-  const comments=getComments();
-  comments.splice(index,1);
-  saveComments(comments);
-  renderComments();
+/* Render Comments */
+function renderComments(comments){
+  const list=document.getElementById('commentList');
+  list.innerHTML="";
+
+  comments.forEach(c=>{
+    const div=document.createElement('div');
+    div.className='comment-item';
+    div.innerHTML=`
+      <strong>${c.name}</strong>
+      <p>${c.message}</p>
+    `;
+    list.appendChild(div);
+  });
 }
 
 /* Load Post */
@@ -345,15 +324,7 @@ if(postId){
 
     temp.querySelectorAll('meta,title').forEach(el=>el.remove());
 
-    const views=updateViews();
-    const likes=getLikes(postId);
-    const liked=isLiked(postId);
-
-    let labelsHTML='';
-    currentLabels.forEach(l=>{
-      labelsHTML+=`<span class="label"
-        onclick="location.href='index.html?label=${l}'">${l}</span>`;
-    });
+    sendData("VIEW");
 
     postContent.innerHTML=`
       <div class="post-header">
@@ -361,15 +332,15 @@ if(postId){
         <div class="stats">
           <div class="stat">
             <span class="material-symbols-outlined">visibility</span>
-            ${formatNumber(views)}
+            <span id="viewCount">0</span>
           </div>
 
-          <div class="stat like-btn ${liked?'active':''}"
+          <div class="stat like-btn"
                onclick="toggleLike(this)">
             <span class="material-symbols-outlined">
-              ${liked?'favorite':'favorite_border'}
+              favorite_border
             </span>
-            <span id="likeCount">${formatNumber(likes)}</span>
+            <span id="likeCount">0</span>
           </div>
 
           <div class="stat">
@@ -380,8 +351,6 @@ if(postId){
       </div>
 
       ${temp.innerHTML}
-
-      <div class="labels">${labelsHTML}</div>
 
       <div class="comments">
         <h3>Comments</h3>
@@ -396,47 +365,7 @@ if(postId){
       </div>
     `;
 
-    renderComments();
-    loadRelated();
-  });
-}
-
-/* Related */
-function loadRelated(){
-  fetch('posts.json')
-  .then(res=>res.json())
-  .then(posts=>{
-    let count=0;
-    posts.forEach(post=>{
-      if(post===postId||count>=3) return;
-      fetch(`posts/${post}`)
-      .then(res=>res.text())
-      .then(html=>{
-        const temp=document.createElement('div');
-        temp.innerHTML=html;
-
-        const labelsMeta=temp.querySelector('meta[name="labels"]');
-        const labels=labelsMeta?labelsMeta.content.split(',').map(l=>l.trim()):[];
-
-        const match=labels.some(l=>currentLabels.includes(l));
-        if(match && count<3){
-          const title=temp.querySelector('title')?.innerText||'Post';
-          const img=temp.querySelector('img');
-
-          const card=document.createElement('div');
-          card.className='related-card';
-          card.innerHTML=`
-            ${img?img.outerHTML:''}
-            <div class="related-card-content">
-              <strong>${title}</strong>
-            </div>
-          `;
-          card.onclick=()=>location.href=`post.html?id=${post}`;
-          relatedContainer.appendChild(card);
-          count++;
-        }
-      });
-    });
+    loadStats();
   });
 }
 </script>
